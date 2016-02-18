@@ -18,6 +18,7 @@ public protocol MenuItemContentView {
 // 带图标的选项卡
 // 布局: [icon]-spacing-[title]
 //
+
 class IconLabelView: UIView, MenuItemContentView {
     private var titleLabel: UILabel = UILabel()
     private var iconView: UIImageView = UIImageView()
@@ -34,6 +35,7 @@ class IconLabelView: UIView, MenuItemContentView {
         var height: CGFloat = 0
 
         let label = self.titleLabel
+        label.translatesAutoresizingMaskIntoConstraints = false
         label.text = title!
         label.textColor = options.textColor
         label.font = options.font
@@ -42,15 +44,16 @@ class IconLabelView: UIView, MenuItemContentView {
         label.userInteractionEnabled = true
         label.translatesAutoresizingMaskIntoConstraints = false
 
-        label.sizeToFit()
+        // label.sizeToFit()
         width = label.frame.width
         height = label.frame.height
 
         let iconView = self.iconView
+        iconView.translatesAutoresizingMaskIntoConstraints = false
         iconView.image = icon!
-        iconView.sizeToFit()
+        // iconView.sizeToFit()
 
-        width = max(width, iconView.frame.width)
+        width = (width + spacing + iconView.frame.width)
         height = max(height, iconView.frame.height)
 
         frame.size.width = width
@@ -58,17 +61,21 @@ class IconLabelView: UIView, MenuItemContentView {
 
         super.init(frame: frame)
 
-        self.addSubview(self.titleLabel)
-        self.addSubview(self.iconView)
+        self.addSubview(label)
+        self.addSubview(iconView)
 
         let viewsDictionary = ["icon": self.iconView, "title": self.titleLabel, "spacing": self.spacing]
-        let horizontalConstraints = NSLayoutConstraint.constraintsWithVisualFormat("H:|[icon]-\(spacing)-[title]|", options: [], metrics: nil, views: viewsDictionary)
+        let horizontalConstraints = NSLayoutConstraint.constraintsWithVisualFormat("H:|-0@250-[icon]-\(spacing)-[title]-0@250-|", options: [], metrics: nil, views: viewsDictionary)
         let iconVerticalConstraints = NSLayoutConstraint.constraintsWithVisualFormat("V:|[icon]|", options: [], metrics: nil, views: viewsDictionary)
         let titleVerticalConstraints = NSLayoutConstraint.constraintsWithVisualFormat("V:|[title]|", options: [], metrics: nil, views: viewsDictionary)
-
+        
         self.addConstraints(horizontalConstraints)
         self.addConstraints(iconVerticalConstraints)
         self.addConstraints(titleVerticalConstraints)
+        
+       // self.iconView.addObserver(self, forKeyPath: "frame", options: NSKeyValueObservingOptions(rawValue: 0x01 | 0x02), context: nil)
+
+        self.layer.borderWidth = 1
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -93,6 +100,34 @@ class IconLabelView: UIView, MenuItemContentView {
         let spacing = (labelSize.width == 0) ? 0 : self.spacing
         return CGSize(width: labelSize.width + iconSize.width + spacing, height: max(labelSize.height, iconSize.height))
     }
+
+    override func intrinsicContentSize() -> CGSize {
+        let iconSize = iconView.sizeThatFits(CGSize(width: CGFloat.max, height: CGFloat.max))
+        let textSize = titleLabel.sizeThatFits(CGSize(width: CGFloat.max, height: CGFloat.max))
+
+        return CGSize(width: iconSize.width + spacing + textSize.width
+        , height: max(iconSize.height, textSize.height))
+    }
+    
+//    override func layoutSubviews() {
+//        let iconSize = iconView.sizeThatFits(CGSize(width: CGFloat.max, height: CGFloat.max))
+//        let textSize = titleLabel.sizeThatFits(CGSize(width: CGFloat.max, height: CGFloat.max))
+//        // let iconSize = iconView.frame.size
+//        // let textSize = titleLabel.frame.size
+//
+//        let width = self.bounds.width
+//        let height = self.bounds.height
+//        let xOffset = (width - iconSize.width - spacing - textSize.width) / 2.0
+//        let yOffset = (height - iconSize.height) / 2.0
+//        iconView.frame = CGRect(origin: CGPoint(x: xOffset, y: yOffset), size: iconSize)
+//
+//        let titleOffsetX = xOffset + iconSize.width + spacing
+//        let titleOffsetY = (height - textSize.height) / 2.0
+//        titleLabel.frame = CGRect(origin: CGPoint(x: titleOffsetX, y: titleOffsetY), size: textSize)
+//    }
+//
+//    override func observeValueForKeyPath(keyPath: String?, ofObject object: AnyObject?, change: [String : AnyObject]?, context: UnsafeMutablePointer<Void>) {
+//    }
 }
 
 extension UILabel: MenuItemContentView {
@@ -190,14 +225,16 @@ public class MenuItemView: UIView {
     }
 
     private func constructLabel() {
-
         if let menuItems = options.menuItems {
             let item = menuItems[itemIndex]
             contentView = IconLabelView.viewWithOptions(item["title"] as? String, icon: item["icon"] as? UIImage, options: options)
         } else {
             contentView = UILabel.viewWithOptions(self.title, icon: nil, options: options)
         }
-        addSubview(contentView as! UIView)
+        if let subView = contentView as? UIView {
+            subView.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(subView)
+        }
     }
 
     private func layoutLabel() {
