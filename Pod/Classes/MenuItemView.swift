@@ -7,9 +7,35 @@
 //
 
 import UIKit
+import SnapKit
 
-public protocol MenuItemContentView {
-    static func viewWithOptions(title: String?, icon: UIImage?, options: PagingMenuOptions) -> MenuItemContentView
+public class MenuItem {
+    var title: String = ""
+
+    required public init(title: String) {
+        self.title = title
+    }
+}
+
+public class IconTextMenuItem: MenuItem {
+    var icon: UIImage
+    var highlightedIcon: UIImage
+    var spacing: CGFloat = 0.0
+
+    required public init(title: String, icon: UIImage, highlightedIcon: UIImage, spacing: CGFloat) {
+        self.icon = icon
+        self.highlightedIcon = highlightedIcon
+        self.spacing = spacing
+        super.init(title: title)
+    }
+
+    required public init(title: String) {
+        fatalError("init(title:) has not been implemented")
+    }
+}
+
+public protocol MenuItemContent {
+    static func viewWithOptions(menuItem: MenuItem, options: PagingMenuOptions) -> MenuItemContent
     func focused(selected: Bool, options: PagingMenuOptions)
     func sizeForTitle(title: String?, options: PagingMenuOptions) -> CGSize
 }
@@ -18,23 +44,28 @@ public protocol MenuItemContentView {
 // 带图标的选项卡
 // 布局: [icon]-spacing-[title]
 //
-class IconLabelView: UIView, MenuItemContentView {
+
+class IconLabelView: UIView, MenuItemContent {
     private var titleLabel: UILabel = UILabel()
     private var iconView: UIImageView = UIImageView()
-    private var spacing: CGFloat = 0.0
+    private var wrapperView: UIView = UIView()
+    private var spacing: CGFloat = 18.0
 
-    class func viewWithOptions(title: String?, icon: UIImage?, options: PagingMenuOptions) -> MenuItemContentView {
-        let view = IconLabelView(title: title, icon: icon, options: options)
+    class func viewWithOptions(menuItem: MenuItem, options: PagingMenuOptions) -> MenuItemContent {
+        let view = IconLabelView(menuItem: menuItem, options: options)
         return view
     }
 
-    init(title: String?, icon: UIImage?, options: PagingMenuOptions) {
-        var frame = CGRect(x: 0, y: 0, width: 100, height: 100)
-        var width: CGFloat = 0
-        var height: CGFloat = 0
+    init(menuItem: MenuItem, options: PagingMenuOptions) {
+
+        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 0))
+
+        let iconTextMenuItem = menuItem as! IconTextMenuItem
+        spacing = iconTextMenuItem.spacing
 
         let label = self.titleLabel
-        label.text = title!
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = iconTextMenuItem.title
         label.textColor = options.textColor
         label.font = options.font
         label.numberOfLines = 1
@@ -42,33 +73,33 @@ class IconLabelView: UIView, MenuItemContentView {
         label.userInteractionEnabled = true
         label.translatesAutoresizingMaskIntoConstraints = false
 
-        label.sizeToFit()
-        width = label.frame.width
-        height = label.frame.height
-
         let iconView = self.iconView
-        iconView.image = icon!
-        iconView.sizeToFit()
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.image = iconTextMenuItem.icon
+        iconView.highlightedImage = iconTextMenuItem.highlightedIcon
 
-        width = max(width, iconView.frame.width)
-        height = max(height, iconView.frame.height)
+        let wrapperView = self.wrapperView
+        wrapperView.addSubview(self.iconView)
+        wrapperView.addSubview(self.titleLabel)
 
-        frame.size.width = width
-        frame.size.height = height
+        self.iconView.snp_makeConstraints { (make) -> Void in
+            make.top.equalTo(wrapperView.snp_top)
+            make.bottom.equalTo(wrapperView.snp_bottom)
+            make.leading.equalTo(wrapperView.snp_leading)
+        }
 
-        super.init(frame: frame)
+        self.titleLabel.snp_makeConstraints { (make) -> Void in
+            make.centerY.equalTo(wrapperView.snp_centerY)
+            make.trailing.equalTo(wrapperView.snp_trailing)
+            make.leading.equalTo(self.iconView.snp_trailing).offset(spacing)
+        }
 
-        self.addSubview(self.titleLabel)
-        self.addSubview(self.iconView)
+        self.addSubview(wrapperView)
+        wrapperView.snp_makeConstraints { (make) -> Void in
+            make.center.equalTo(self.center)
+        }
 
-        let viewsDictionary = ["icon": self.iconView, "title": self.titleLabel, "spacing": self.spacing]
-        let horizontalConstraints = NSLayoutConstraint.constraintsWithVisualFormat("H:|[icon]-\(spacing)-[title]|", options: [], metrics: nil, views: viewsDictionary)
-        let iconVerticalConstraints = NSLayoutConstraint.constraintsWithVisualFormat("V:|[icon]|", options: [], metrics: nil, views: viewsDictionary)
-        let titleVerticalConstraints = NSLayoutConstraint.constraintsWithVisualFormat("V:|[title]|", options: [], metrics: nil, views: viewsDictionary)
-
-        self.addConstraints(horizontalConstraints)
-        self.addConstraints(iconVerticalConstraints)
-        self.addConstraints(titleVerticalConstraints)
+        self.layer.borderWidth = 1
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -79,10 +110,13 @@ class IconLabelView: UIView, MenuItemContentView {
         let titleLabel = self.titleLabel
         titleLabel.textColor = selected ? options.selectedTextColor : options.textColor
         titleLabel.font = selected ? options.selectedFont : options.font
+        
+        self.iconView.highlighted = selected
     }
 
     func sizeForTitle(title: String?, options: PagingMenuOptions) -> CGSize
     {
+        #if false
         let labelSize = NSString(string: title!)
             .boundingRectWithSize(CGSizeMake(CGFloat.max, CGFloat.max),
             options: NSStringDrawingOptions.UsesLineFragmentOrigin,
@@ -92,13 +126,27 @@ class IconLabelView: UIView, MenuItemContentView {
 
         let spacing = (labelSize.width == 0) ? 0 : self.spacing
         return CGSize(width: labelSize.width + iconSize.width + spacing, height: max(labelSize.height, iconSize.height))
+        #else
+        return self.wrapperView.intrinsicContentSize() ;
+        #endif
+    }
+
+    override func intrinsicContentSize() -> CGSize {
+        return self.wrapperView.intrinsicContentSize() ;
+        #if false
+        let iconSize = iconView.sizeThatFits(CGSize(width: CGFloat.max, height: CGFloat.max))
+        let textSize = titleLabel.sizeThatFits(CGSize(width: CGFloat.max, height: CGFloat.max))
+
+        return CGSize(width: iconSize.width + spacing + textSize.width
+        , height: max(iconSize.height, textSize.height))
+        #endif
     }
 }
 
-extension UILabel: MenuItemContentView {
-    public class func viewWithOptions(title: String? = nil, icon: UIImage? = nil, options: PagingMenuOptions) -> MenuItemContentView {
+extension UILabel: MenuItemContent {
+    public class func viewWithOptions(menuItem: MenuItem, options: PagingMenuOptions) -> MenuItemContent {
         let label = UILabel()
-        label.text = title
+        label.text = menuItem.title
         label.textColor = options.textColor
         label.font = options.font
         label.numberOfLines = 1
@@ -125,7 +173,7 @@ extension UILabel: MenuItemContentView {
 
 public class MenuItemView: UIView {
 
-    public private(set) var contentView: MenuItemContentView!
+    public private(set) var contentView: MenuItemContent!
     private var options: PagingMenuOptions!
     private var title: String!
     private var icon: UIImage!
@@ -190,14 +238,17 @@ public class MenuItemView: UIView {
     }
 
     private func constructLabel() {
-
         if let menuItems = options.menuItems {
-            let item = menuItems[itemIndex]
-            contentView = IconLabelView.viewWithOptions(item["title"] as? String, icon: item["icon"] as? UIImage, options: options)
+            let menuItem = menuItems[itemIndex]
+            contentView = IconLabelView.viewWithOptions(menuItem, options: options)
         } else {
-            contentView = UILabel.viewWithOptions(self.title, icon: nil, options: options)
+            let menuItem = MenuItem(title: self.title)
+            contentView = UILabel.viewWithOptions(menuItem, options: options)
         }
-        addSubview(contentView as! UIView)
+        if let subView = contentView as? UIView {
+            subView.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(subView)
+        }
     }
 
     private func layoutLabel() {
